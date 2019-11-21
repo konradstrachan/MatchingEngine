@@ -2,15 +2,16 @@
 
 #include "Types.h"
 
-class IEngineEvent
+class IEngineEvents
 {
 public:
     virtual OrderPlaceEventResult OnOrderPlace(Order&& o) = 0;
     virtual OrderCancelEventResult OnOrderCancel(OrderID oid) = 0;
 };
 
-class IMatchingEvent
+class IExchangeEvents
 {
 public:
-    virtual void OnOrderMatched(Order&& o) = 0;
+    virtual void OnNewOrder(OrderID oid, const Order& mo) = 0;
+    virtual void OnOrderMatched(const MatchedOrder& mo) = 0;
 };

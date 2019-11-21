@@ -10,9 +10,9 @@ void MatchingEngine::InitialiseMarkets(const std::vector<std::string>& markets)
     }
 }
 
-void MatchingEngine::RegisterEventObserver(IMatchingEvent* pObserver)
+void MatchingEngine::RegisterEventObserver(IExchangeEvents* pObserver)
 {
-    m_matchingEventObservers.push_back(pObserver);
+    m_eventObservers.push_back(pObserver);
 }
 
 OrderPlaceEventResult MatchingEngine::OnOrderPlace(Order&& o)
@@ -49,7 +49,8 @@ OrderPlaceEventResult MatchingEngine::HandleOrderBookUpdate(Order&& o)
         OrderBookOrdersAtPosition& oboap = obp[o.price];
         oboap.insert({m_nextOrderID, o.volume});
         m_orderLookup.insert(std::make_pair(m_nextOrderID, &oboap));
-        ++m_nextOrderID;
+        
+        NotifyOrderBookEventObservers(m_nextOrderID++, o);
     };
 
     if(o.type == OrderType::Bid)
@@ -62,7 +63,7 @@ OrderPlaceEventResult MatchingEngine::HandleOrderBookUpdate(Order&& o)
     }
 
     // Check for matched events
-    const bool matchedOrder = TickOrderBook(itMarket->second);
+    const bool matchedOrder = TickOrderBook(o.market, itMarket->second);
 
     return matchedOrder 
         ? OrderPlaceEventResult::OrderMatched
@@ -85,7 +86,7 @@ bool MatchingEngine::HandleOrderBookCancel(OrderID oid)
     return cancelledOrder;
 }
 
-bool MatchingEngine::TickOrderBook(Market& market)
+bool MatchingEngine::TickOrderBook(const std::string& marketName, Market& market)
 {
     auto& [bids, asks] = market;
 
@@ -120,18 +121,48 @@ bool MatchingEngine::TickOrderBook(Market& market)
                    && itAskPositionOrder != askPositionOrders.end())
             {
                 matchOccurred = true;
+
+                // Determine whether the resulting trade event is a buy or sell
+                // side by using the earlier order ID to determine sequence of events
+                const OrderType sideOfResultingMatch = 
+                    itBidPositionOrder->first > itAskPositionOrder->first 
+                        ? OrderType::Ask : OrderType::Bid;
                     
                 if(itBidPositionOrder->second == itAskPositionOrder->second)
                 {
                     // Equal sizes of orders, remove both
-                    // TODO match notification
+
+                    MatchedOrder mo
+                    {
+                        marketName,
+                        itBidPositionOrder->first,
+                        itAskPositionOrder->first,
+                        itAskOrders->first,             // take position from ASK side
+                        itBidPositionOrder->second,     // take volume from BID side (both are the same)
+                        sideOfResultingMatch
+                    };
+
+                    NotifyMatchingEventObservers(mo);
+
                     bidPositionOrders.erase(itBidPositionOrder++);
                     askPositionOrders.erase(itAskPositionOrder++);
                 }
                 else if(itBidPositionOrder->second < itAskPositionOrder->second)
                 {
                     // This BID order satisfies part of the ASK order
-                    // TODO match notification
+                    
+                    MatchedOrder mo
+                    {
+                        marketName,
+                        itBidPositionOrder->first,
+                        itAskPositionOrder->first,
+                        itAskOrders->first,             // take position from ASK side
+                        itBidPositionOrder->second,     // take volume from BID side since it is smaller
+                        sideOfResultingMatch
+                    };
+
+                    NotifyMatchingEventObservers(mo);
+
                     itAskPositionOrder->second -= itBidPositionOrder->second;
                     bidPositionOrders.erase(itBidPositionOrder++);
                 }
@@ -140,7 +171,19 @@ bool MatchingEngine::TickOrderBook(Market& market)
                     // Equivalent to if(itBidPositionOrder->second > itAskPositionOrder->second)
 
                     // This ASK order satisfies part of the BID order
-                    // TODO match notification
+                    
+                    MatchedOrder mo
+                    {
+                        marketName,
+                        itBidPositionOrder->first,
+                        itAskPositionOrder->first,
+                        itAskOrders->first,             // take position from ASK side
+                        itAskPositionOrder->second,     // take volume from ASK side since it is smaller
+                        sideOfResultingMatch
+                    };
+
+                    NotifyMatchingEventObservers(mo);
+
                     itBidPositionOrder->second -= itAskPositionOrder->second;
                     askPositionOrders.erase(itAskPositionOrder++);
                 }
@@ -182,4 +225,20 @@ bool MatchingEngine::TickOrderBook(Market& market)
     }
 
     return matchOccurred;
+}
+
+void MatchingEngine::NotifyOrderBookEventObservers(OrderID oid, const Order& mo)
+{
+    for(const auto& observer : m_eventObservers)
+    {
+        observer->OnNewOrder(oid, mo);
+    }
+}
+
+void MatchingEngine::NotifyMatchingEventObservers(const MatchedOrder& mo)
+{
+    for(const auto& observer : m_eventObservers)
+    {
+        observer->OnOrderMatched(mo);
+    }
 }

@@ -16,9 +16,7 @@ enum class OrderCancelEventResult
     OrderNotFound
 };
 
-// Floating point is lossy due to rounding issues,
-// however this will suffice for a simple demo
-using NumericType = double;
+using NumericType = uint32_t;
 
 using OrderID = uint64_t;
 
@@ -31,7 +29,23 @@ enum class OrderType
 struct Order
 {
     std::string market;
-    NumericType price{0.0};
-    NumericType volume{0.0};
+    NumericType price{0};
+    NumericType volume{0};
+    OrderType type{OrderType::Bid};
+
+    bool operator !=(const Order& rhs) const
+    {
+        return std::tie(market, price, volume, type) 
+            != std::tie(rhs.market, rhs.price, rhs.volume, rhs.type);
+    }
+};
+
+struct MatchedOrder
+{
+    std::string market;
+    OrderID bidSideOrderID;
+    OrderID askSideOrderID;
+    NumericType price{0};
+    NumericType volume{0};
     OrderType type{OrderType::Bid};
 };

@@ -4,7 +4,7 @@
 
 #include "EngineInterfaces.h"
 
-class MatchingEngine : public IEngineEvent
+class MatchingEngine : public IEngineEvents
 {
 public:
     MatchingEngine() = default;
@@ -16,14 +16,14 @@ public:
 
     void InitialiseMarkets(const std::vector<std::string>& markets);
 
-    void RegisterEventObserver(IMatchingEvent* pObserver);
+    void RegisterEventObserver(IExchangeEvents* pObserver);
 
     //
-    // IEngineEvent implementation
+    // IEngineEvents implementation
     //
 
-    virtual OrderPlaceEventResult OnOrderPlace(Order&& o) override;
-    virtual OrderCancelEventResult OnOrderCancel(OrderID oid) override;
+    virtual OrderPlaceEventResult OnOrderPlace(Order&& o) override final;
+    virtual OrderCancelEventResult OnOrderCancel(OrderID oid) override final;
 
 private:
 
@@ -39,11 +39,14 @@ private:
     OrderPlaceEventResult HandleOrderBookUpdate(Order&& o);
 
     bool HandleOrderBookCancel(OrderID o);
-    bool TickOrderBook(Market& market);
+    bool TickOrderBook(const std::string& marketName, Market& market);
 
-    uint64_t m_nextOrderID{ 0 };
+    void NotifyOrderBookEventObservers(OrderID oid, const Order& mo);
+    void NotifyMatchingEventObservers(const MatchedOrder& mo);
 
-    std::vector<IMatchingEvent*> m_matchingEventObservers;
+    OrderID m_nextOrderID{ 0 };
+
+    std::vector<IExchangeEvents*> m_eventObservers;
     
     // Non-owning collection for fast order ID lookups
     OrderLookup m_orderLookup;
