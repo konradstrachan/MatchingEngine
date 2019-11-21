@@ -1,5 +1,7 @@
 #include "pch.h"
 
+#include <cassert>
+
 #include "MatchingEngine.h"
 
 void MatchingEngine::InitialiseMarkets(const std::vector<std::string>& markets)
@@ -63,6 +65,7 @@ OrderPlaceEventResult MatchingEngine::HandleOrderBookUpdate(Order&& o)
     }
 
     // Check for matched events
+    // TODO Optimisation: only tick when there is a change to BB/BA of book
     const bool matchedOrder = TickOrderBook(o.market, itMarket->second);
 
     return matchedOrder 
@@ -81,9 +84,14 @@ bool MatchingEngine::HandleOrderBookCancel(OrderID oid)
 
     OrderBookOrdersAtPosition& oboap = *it->second;
     
-    const bool cancelledOrder = oboap.erase(oid) > 0;
     m_orderLookup.erase(it);
-    return cancelledOrder;
+    if(oboap.erase(oid) > 0)
+    {
+        NotifyCancelEventObservers(oid);
+        return true;
+    }
+    
+    return false;
 }
 
 bool MatchingEngine::TickOrderBook(const std::string& marketName, Market& market)
@@ -106,7 +114,11 @@ bool MatchingEngine::TickOrderBook(const std::string& marketName, Market& market
     
     while(shouldContinue)
     {
-        if(ritBidOrders->first >= itAskOrders->first)
+        const NumericType& bestBid = ritBidOrders->first;
+        const NumericType& bestAsk = itAskOrders->first;
+        const bool orderCross = bestBid >= bestAsk;
+
+        if(orderCross)
         {
             // Topmost bid position crosses the current ask
             // This indicates match(es) can occur
@@ -128,6 +140,18 @@ bool MatchingEngine::TickOrderBook(const std::string& marketName, Market& market
                     itBidPositionOrder->first > itAskPositionOrder->first 
                         ? OrderType::Ask : OrderType::Bid;
                     
+                const NumericType matchingPrice = 
+                    [&sideOfResultingMatch, &itAskOrders, &ritBidOrders]() -> NumericType
+                {
+                    if(sideOfResultingMatch == OrderType::Bid)
+                    {
+                        return ritBidOrders->first;
+                    }
+                    
+                    assert(sideOfResultingMatch == OrderType::Ask);
+                    return itAskOrders->first;
+                }();
+
                 if(itBidPositionOrder->second == itAskPositionOrder->second)
                 {
                     // Equal sizes of orders, remove both
@@ -137,7 +161,7 @@ bool MatchingEngine::TickOrderBook(const std::string& marketName, Market& market
                         marketName,
                         itBidPositionOrder->first,
                         itAskPositionOrder->first,
-                        itAskOrders->first,             // take position from ASK side
+                        matchingPrice,
                         itBidPositionOrder->second,     // take volume from BID side (both are the same)
                         sideOfResultingMatch
                     };
@@ -156,7 +180,7 @@ bool MatchingEngine::TickOrderBook(const std::string& marketName, Market& market
                         marketName,
                         itBidPositionOrder->first,
                         itAskPositionOrder->first,
-                        itAskOrders->first,             // take position from ASK side
+                        matchingPrice,
                         itBidPositionOrder->second,     // take volume from BID side since it is smaller
                         sideOfResultingMatch
                     };
@@ -177,7 +201,7 @@ bool MatchingEngine::TickOrderBook(const std::string& marketName, Market& market
                         marketName,
                         itBidPositionOrder->first,
                         itAskPositionOrder->first,
-                        itAskOrders->first,             // take position from ASK side
+                        matchingPrice,
                         itAskPositionOrder->second,     // take volume from ASK side since it is smaller
                         sideOfResultingMatch
                     };
@@ -240,5 +264,13 @@ void MatchingEngine::NotifyMatchingEventObservers(const MatchedOrder& mo)
     for(const auto& observer : m_eventObservers)
     {
         observer->OnOrderMatched(mo);
+    }
+}
+
+void MatchingEngine::NotifyCancelEventObservers(OrderID o)
+{
+    for(const auto& observer : m_eventObservers)
+    {
+        observer->OnCancelledOrder(o);
     }
 }

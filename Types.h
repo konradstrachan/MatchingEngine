@@ -48,4 +48,10 @@ struct MatchedOrder
     NumericType price{0};
     NumericType volume{0};
     OrderType type{OrderType::Bid};
+
+    bool operator !=(const MatchedOrder& rhs) const
+    {
+        return std::tie(market, bidSideOrderID, askSideOrderID, price, volume, type) 
+            != std::tie(rhs.market, rhs.bidSideOrderID, rhs.askSideOrderID, rhs.price, rhs.volume, rhs.type);
+    }
 };

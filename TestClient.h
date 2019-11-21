@@ -12,9 +12,14 @@ public:
     //  IExchangeEvents implementation
     //
 
-    virtual void OnNewOrder(OrderID oid, const Order& mo) override final
+    virtual void OnNewOrder(OrderID oid, const Order& o) override final
     {
-        m_orderBookUpdateEvents.push_back(std::make_pair(oid, mo));
+        m_orderBookUpdateEvents.push_back(std::make_pair(oid, o));
+    }
+
+    virtual void OnCancelledOrder(OrderID oid) override final
+    {
+        m_cancelEvents.push_back(oid);
     }
 
     virtual void OnOrderMatched(const MatchedOrder& mo) override final
@@ -24,4 +29,5 @@ public:
 
     std::vector<std::pair<OrderID, Order>> m_orderBookUpdateEvents;
     std::vector<MatchedOrder> m_matchingEvents;
+    std::vector<OrderID> m_cancelEvents;
 };

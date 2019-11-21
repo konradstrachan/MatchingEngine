@@ -43,6 +43,7 @@ private:
 
     void NotifyOrderBookEventObservers(OrderID oid, const Order& mo);
     void NotifyMatchingEventObservers(const MatchedOrder& mo);
+    void NotifyCancelEventObservers(OrderID o);
 
     OrderID m_nextOrderID{ 0 };
 

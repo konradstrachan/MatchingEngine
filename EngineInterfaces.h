@@ -12,6 +12,7 @@ public:
 class IExchangeEvents
 {
 public:
-    virtual void OnNewOrder(OrderID oid, const Order& mo) = 0;
+    virtual void OnNewOrder(OrderID oid, const Order& o) = 0;
+    virtual void OnCancelledOrder(OrderID oid) = 0;
     virtual void OnOrderMatched(const MatchedOrder& mo) = 0;
 };
