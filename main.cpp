@@ -19,6 +19,7 @@
                   << std::endl;                                                 \
         assert(false);                                                          \
         result = false;                                                         \
+        ++testsFailed;                                                          \
     }
 
 int main()
@@ -40,6 +41,8 @@ int main()
 
         return results;
     };
+
+    uint32_t testsFailed{0};
 
     {
         START_TEST( "Populate simple OB" )
@@ -357,5 +360,12 @@ int main()
         EXPECTED(tc.m_cancelEvents.empty(), true);
     }
 
-    return 0;
+    if(testsFailed == 0)
+    {
+        std::cout << "Tests passed successfully" << std::endl;
+        return 0;
+    }
+    
+    std::cout << "Tests failed :(" << std::endl;
+    return 1;
 }
